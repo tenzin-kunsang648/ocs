@@ -1,0 +1,51 @@
+---
+title: "dataAnalysisOCS"
+author: "OCS Team"
+date: "5/22/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(stringr)
+library(rebus)
+library(tidyverse)
+```
+
+```{r}
+ocs_data_may22 <- read_csv("ocs_data_may22.csv")
+#select only the question columns
+ocs <- ocs_data_may22 %>% 
+  select(starts_with("Q"))
+
+#rename column names
+names(ocs) <- c("attend_OCS", "reason_not", "reason_not_text", "abroad_classYear", "europe", "reason_europe", "reason_europe_text", "varsity", "varsity_terms", "ocs_before", "major", "major_text")
+
+names(ocs)
+
+#filtering out the first two rows
+ocs <- ocs[3:nrow(ocs),]
+
+#find out the percentage of varsity students at Carleton so we can normalize
+#https://apps.carleton.edu/voice/?story_id=1836663&section_id=353600&issue_id=1836011
+#70% of varsity students study abroad
+
+ocs %>% 
+  drop_na(varsity) %>% 
+  group_by(attend_OCS, varsity) %>%
+  summarize(count = length(varsity)) %>% 
+  ggplot(aes(x = attend_OCS, y = count, fill = varsity)) + geom_bar(position = "dodge", stat = "identity")
+
+ocs %>% 
+  drop_na(major) %>% 
+  group_by(attend_OCS, major) %>%
+  summarize(count = length(major)) %>% 
+  ggplot(aes(x = attend_OCS, y = count, fill = major)) + geom_bar(position = "dodge", stat = "identity")
+```
+```{r}
+
+```
+
