@@ -3,8 +3,8 @@ title: "dataAnalysisOCS"
 author: "OCS Team"
 date: "5/22/2020"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -13,18 +13,17 @@ library(dplyr)
 library(stringr)
 library(rebus)
 library(tidyverse)
+library(forcats)
 ```
 
 ```{r}
-ocs_data_may22 <- read_csv("ocs_data_may22.csv")
+ocs <- read_csv("ocs_data_may22.csv")
 #select only the question columns
-ocs <- ocs_data_may22 %>% 
+ocs <- ocs %>% 
   select(starts_with("Q"))
 
 #rename column names
 names(ocs) <- c("attend_OCS", "reason_not", "reason_not_text", "abroad_classYear", "europe", "reason_europe", "reason_europe_text", "varsity", "varsity_terms", "ocs_before", "major", "major_text")
-
-names(ocs)
 
 #filtering out the first two rows
 ocs <- ocs[3:nrow(ocs),]
@@ -45,7 +44,86 @@ ocs %>%
   summarize(count = length(major)) %>% 
   ggplot(aes(x = attend_OCS, y = count, fill = major)) + geom_bar(position = "dodge", stat = "identity")
 ```
-```{r}
+```{r eval=FALSE, echo = FALSE}
 
+
+#ocs$newMajor <- fct_collapse(ocs$major,
+ # stem = c("1", "1,2", "1,3", "1,4", "1,5"),
+  #humanities = c("2", "1,2", "2,3", "2,4", "2,5"),
+  #socialScience = c("3", "1,3", "2,3", "3,4", "3,5"),
+  #arts = c("4", "1,4", "2,4", "3,4", "4,5"),
+  #other = c("5", "1,5", "2,5", "3,5", "4,5")
+#)
+
+ocs$newMajor <- fct_collapse(ocs$major,
+  stem = c("1", "1,2", "1,3", "1,4"),
+  humanities = c("2", "1,2", "2,3", "2,4"),
+  socialScience = c("3", "1,3", "2,3", "3,5"),
+  arts = c("4", "1,4", "2,4"),
+  other = c("5", "3,5")
+)
+fct_count(ocs$newMajor)
+```
+
+```{r}
+ocs$attend_OCS <- as.factor(ocs$attend_OCS) %>% 
+  recode_factor("1" = "Yes", "2" = "No")
+
+ocs$varsity <- as.factor(ocs$varsity) %>% 
+  recode_factor("1" = "Yes", "2" = "No")
+
+ocs %>% 
+  drop_na(varsity) %>% 
+  group_by(attend_OCS, varsity) %>%
+  summarize(count = length(varsity)) %>%
+  ggplot(aes(x = attend_OCS, y = count, fill = varsity)) + geom_bar(position = "dodge", stat = "identity")
+```
+
+```{r}
+ocs$major <- as.factor(ocs$major) %>% 
+  recode_factor("1" = "Stem", "2" = "Humanities", "3" = "Social Science", "4" = "Arts", "5" = "Others")
+
+#not including double majors
+ocs %>% 
+  drop_na(major) %>% 
+  filter(major == "Stem" | major == "Humanities" |major == "Social Science" | major =="Arts"| major == "Others") %>% 
+  group_by(attend_OCS, major) %>%
+  summarize(count = length(major)) %>%
+  ggplot(aes(x = attend_OCS, y = count, fill = major)) + geom_bar(position = "dodge", stat = "identity")
+```
+```{r}
+ocs %>% 
+  group_by(varsity) %>% 
+  summarize(count = length(varsity))
+```
+```{r}
+ocs %>% 
+  filter(attend_OCS == "No") %>% 
+  group_by(reason_not) %>% 
+  summarize(count = length(reason_not))
+
+#check the statistical significance between number of people who are in varsity and poeple who didn't go because of varsity conflicts (number 4)
+```
+```{r}
+ocs$europe <- as.factor(ocs$europe) %>% 
+  recode_factor("1" = "Yes", "2" = "No")
+
+ocs %>% 
+  group_by(europe, major) %>% 
+  summarize(count = length(europe))
+
+#not including double majors
+ocs %>% 
+  drop_na(major, europe) %>% 
+  filter(major == "Stem" | major == "Humanities" |major == "Social Science" | major =="Arts"| major == "Others") %>% 
+  group_by(europe, major) %>%
+  summarize(count = length(major)) %>%
+  ggplot(aes(x = europe, y = count, fill = major)) + geom_bar(position = "dodge", stat = "identity")
+```
+```{r}
+ocs %>% 
+  filter(europe == "Yes") %>% 
+  group_by(reason_europe) %>% 
+  summarize(count = length(reason_not))
 ```
 
