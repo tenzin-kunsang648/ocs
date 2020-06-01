@@ -3,8 +3,8 @@ title: "dataAnalysisOCS"
 author: "OCS Team"
 date: "5/22/2020"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
