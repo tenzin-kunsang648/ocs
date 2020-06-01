@@ -13,13 +13,15 @@ library(dplyr)
 library(stringr)
 library(rebus)
 library(tidyverse)
+library(tidyr)
 library(forcats)
 ```
 
 ```{r}
-ocs <- read_csv("ocs_data_may22.csv")
-#select only the question columns
-ocs <- ocs %>% 
+#retrieve the dataset from the survey and select the relevant columns
+ocs <- read_csv("OCS_OG_dataset.csv") 
+
+ocs <- ocs %>%
   select(starts_with("Q"))
 
 #rename column names
@@ -32,98 +34,315 @@ ocs <- ocs[3:nrow(ocs),]
 #https://apps.carleton.edu/voice/?story_id=1836663&section_id=353600&issue_id=1836011
 #70% of varsity students study abroad
 
-ocs %>% 
-  drop_na(varsity) %>% 
-  group_by(attend_OCS, varsity) %>%
-  summarize(count = length(varsity)) %>% 
-  ggplot(aes(x = attend_OCS, y = count, fill = varsity)) + geom_bar(position = "dodge", stat = "identity")
 
-ocs %>% 
-  drop_na(major) %>% 
-  group_by(attend_OCS, major) %>%
-  summarize(count = length(major)) %>% 
-  ggplot(aes(x = attend_OCS, y = count, fill = major)) + geom_bar(position = "dodge", stat = "identity")
-```
-```{r eval=FALSE, echo = FALSE}
+#Factorize some columns
 
-
-#ocs$newMajor <- fct_collapse(ocs$major,
- # stem = c("1", "1,2", "1,3", "1,4", "1,5"),
-  #humanities = c("2", "1,2", "2,3", "2,4", "2,5"),
-  #socialScience = c("3", "1,3", "2,3", "3,4", "3,5"),
-  #arts = c("4", "1,4", "2,4", "3,4", "4,5"),
-  #other = c("5", "1,5", "2,5", "3,5", "4,5")
-#)
-
-ocs$newMajor <- fct_collapse(ocs$major,
-  stem = c("1", "1,2", "1,3", "1,4"),
-  humanities = c("2", "1,2", "2,3", "2,4"),
-  socialScience = c("3", "1,3", "2,3", "3,5"),
-  arts = c("4", "1,4", "2,4"),
-  other = c("5", "3,5")
-)
-fct_count(ocs$newMajor)
-```
-
-```{r}
 ocs$attend_OCS <- as.factor(ocs$attend_OCS) %>% 
   recode_factor("1" = "Yes", "2" = "No")
 
 ocs$varsity <- as.factor(ocs$varsity) %>% 
   recode_factor("1" = "Yes", "2" = "No")
 
+ocs$europe <- as.factor(ocs$europe) %>% 
+  recode_factor("1" = "Yes", "2" = "No")
+```
+
+```{r}
+#recount double+ majors as separate rows
+
+ocs$stem <- str_detect(ocs$major, pattern = zero_or_more(ALPHA) %R% "STEM")
+ocs$humanities <- str_detect(ocs$major, pattern = zero_or_more(ALPHA) %R% "Humanities")
+ocs$ss <- str_detect(ocs$major, pattern = zero_or_more(ALPHA) %R% "Social Sciences")
+ocs$arts <- str_detect(ocs$major, pattern = zero_or_more(ALPHA) %R% "Arts")
+ocs$other <- str_detect(ocs$major, pattern = zero_or_more(ALPHA) %R% "Other")
+
+ocs_pivottedMajor <- pivot_longer(ocs, cols = stem:other, 
+                                  names_to = "noDoubleMajor", 
+                                  values_to = "majorTF") %>% 
+  filter(majorTF == "TRUE") %>% 
+  select(-majorTF)
+
+#bar chart of majors vs study abroad
+ocs_pivottedMajor %>% 
+  group_by(noDoubleMajor, attend_OCS) %>% 
+  summarize(count = n()) %>% 
+  ggplot(aes(x = attend_OCS, y = count, fill = noDoubleMajor)) +
+  geom_bar(position = "dodge", stat = "identity") + 
+  labs(x = "Attend an OCS Program?", 
+       title = "Number of students who attended OCS program based on field of major",
+       fill = "Field of Major") +
+  theme(
+    panel.background = element_rect(fill = "black",colour = "white",size = 0.5), 
+    panel.grid.major = element_line(colour = "grey70"),
+    axis.title.y = element_blank()) 
+```
+
+```{r}
+#bar chart of majors vs europe program
+
+ocs_pivottedMajor %>% 
+  drop_na(europe) %>% 
+  group_by(noDoubleMajor, europe) %>% 
+  summarize(count = n()) %>% 
+  ggplot(aes(x = europe, y = count, fill = noDoubleMajor)) +
+  geom_bar(position = "dodge", stat = "identity") + 
+  labs(x = "Attend a Europe Program?", 
+       title = "Number of students who attended Europe program based on field of major",
+       fill = "Field of Major") +
+  theme(
+    panel.background = element_rect(fill = "black",colour = "white",size = 0.5), 
+    panel.grid.major = element_line(colour = "grey70"),
+    axis.title.y = element_blank()) 
+```
+
+
+
+```{r warning = FALSE, error=FALSE}
+#bar chart of varsity vs study abroad
 ocs %>% 
   drop_na(varsity) %>% 
   group_by(attend_OCS, varsity) %>%
-  summarize(count = length(varsity)) %>%
-  ggplot(aes(x = attend_OCS, y = count, fill = varsity)) + geom_bar(position = "dodge", stat = "identity")
+  summarize(count = n()) %>%
+  ggplot(aes(x = attend_OCS, y = count, fill = varsity)) +
+  geom_bar(position = "dodge", stat = "identity") + 
+  labs(x = "Attend an OCS Program?", 
+       title = "Number of students who attended OCS program based on varsity",
+       fill = "Varsity") +
+  theme(
+    panel.background = element_rect(fill = "black",colour = "white",size = 0.5), 
+    panel.grid.major = element_line(colour = "grey70"),
+    axis.title.y = element_blank()) 
+  
 ```
 
 ```{r}
-ocs$major <- as.factor(ocs$major) %>% 
-  recode_factor("1" = "Stem", "2" = "Humanities", "3" = "Social Science", "4" = "Arts", "5" = "Others")
+## 1. Major vs. study abroad
 
-#not including double majors
-ocs %>% 
-  drop_na(major) %>% 
-  filter(major == "Stem" | major == "Humanities" |major == "Social Science" | major =="Arts"| major == "Others") %>% 
-  group_by(attend_OCS, major) %>%
-  summarize(count = length(major)) %>%
-  ggplot(aes(x = attend_OCS, y = count, fill = major)) + geom_bar(position = "dodge", stat = "identity")
+#NULL HYPOTHESIS: No association between major and study abroad
+#ALTERNATIVE: Association between major and study abroad
+
+#major_abroad <- table(ocs_pivottedMajor$noDoubleMajor, ocs_pivottedMajor$attend_OCS)
+
+#there is no evidence that there is association between major and studying abroad 
+#that is, there is no evidence that whether students study abroad or not is dependent on what field of major they are in...
+chisq.test(ocs_pivottedMajor$noDoubleMajor, ocs_pivottedMajor$attend_OCS)
+
+#confirm to see if they are independent using poisson regression
+y <- c(33, 3, 97, 16, 22, 8, 109, 24, 190, 56)
+major <- factor(c(rep("arts",2),rep("humanities",2), rep("other",2), rep("ss",2), rep("stem",2)))
+studyAbroad <- factor(rep(c("yes","no"),5))
+major_abroad_df <- data.frame(y, major, studyAbroad)
+major_abroad_df
+
+major_abroad_glm <- glm(y ~ major + studyAbroad + major:studyAbroad, family=poisson, data=major_abroad_df)
+summary(major_abroad_glm)
+
+## 2. Varsity vs. Study abroad
+
+#varsity_abroad <- table(ocs$varsity, ocs$attend_OCS)
+
+#there is no evidence that there is association between studying abroad and varsity
+chisq.test(ocs$varsity, ocs$attend_OCS)
+
+#confirm to see if they are independent using poisson regression
+y <- c(77, 13, 353, 79)
+varsity <- factor(c(rep("yes",2),rep("no",2)))
+studyAbroad <- factor(rep(c("yes","no"),2))
+varsity_abroad_df <- data.frame(y, varsity, studyAbroad)
+varsity_abroad_df
+
+varsity_abroad_glm <- glm(y ~ varsity + studyAbroad + varsity:studyAbroad, family=poisson, data=varsity_abroad_df)
+summary(varsity_abroad_glm)
+
+## 3. Major vs. Study Europe
+europe_major_df <- ocs_pivottedMajor %>% 
+  drop_na(europe) %>% 
+  filter(attend_OCS == "Yes")
+
+#major_europe <- table(major_df$noDoubleMajor, major_df$europe)
+
+#EDA shows that 50% of arts and stem students study in Europe, 
+#whereas ~67% of humanities students study in europe and 
+#~65% of social science students study in Europe.
+
+#Chisq test shows that these differences are statistically significant. 
+#that is, humanities and social science students seem to prefer studying in Europe over the rest of the world
+chisq.test(europe_major_df$noDoubleMajor, europe_major_df$europe)
+
+#confirm to see if they are independent using poisson regression
+y <- c(16, 16, 64, 32, 17, 4, 69, 37, 93, 91)
+major <- factor(c(rep("arts",2),rep("humanities",2), rep("other",2), rep("ss",2), rep("stem",2)))
+studyEurope <- factor(rep(c("yes","no"),5))
+major_europe_df <- data.frame(y, major, studyEurope)
+major_europe_df
+
+major_europe_glm <- glm(y ~ major + studyEurope + major:studyEurope, family=poisson, data=major_europe_df)
+#other vs. study abroad seems significant...
+summary(major_europe_glm)
+
+#but other has no discerning feature -- not important factor to consider
+other <- ocs_pivottedMajor %>% 
+  filter(noDoubleMajor == "other") 
+
+#the statistical significance seen earlier with chisq test might be because of the major factor other
+#there is no evidence that there is association between major and studying in europe 
+#that is, there is no evidence that whether students study in europe or not is dependent on what field of major they are in...
+
+#let's repeat without other factor
+
+europe_major_df <- ocs_pivottedMajor %>% 
+  drop_na(europe) %>% 
+  filter(attend_OCS == "Yes", noDoubleMajor != "other")
+
+#major_europe <- table(major_df$noDoubleMajor, major_df$europe)
+
+chisq.test(europe_major_df$noDoubleMajor, europe_major_df$europe)
+
+#confirm to see if they are independent using poisson regression
+y <- c(16, 16, 64, 32, 69, 37, 93, 91)
+major <- factor(c(rep("arts",2),rep("humanities",2), rep("ss",2), rep("stem",2)))
+studyEurope <- factor(rep(c("yes","no"),4))
+major_europe_df <- data.frame(y, major, studyEurope)
+major_europe_df
+
+major_europe_glm <- glm(y ~ major + studyEurope + major:studyEurope, family=poisson, data=major_europe_df)
+
+#this test tells us that whether students study in Europe or not is independent of their field of major
+summary(major_europe_glm)
 ```
+
 ```{r}
-ocs %>% 
-  group_by(varsity) %>% 
-  summarize(count = length(varsity))
-```
-```{r}
-ocs %>% 
+#MORE EDA
+#RELATIONSHIP BETWEEN MAJOR AND WHY NOT ABROAD
+
+notAbroad <- ocs_pivottedMajor %>% 
   filter(attend_OCS == "No") %>% 
-  group_by(reason_not) %>% 
-  summarize(count = length(reason_not))
+  select(reason_not, reason_not_text, varsity, ocs_before, noDoubleMajor)
 
-#check the statistical significance between number of people who are in varsity and poeple who didn't go because of varsity conflicts (number 4)
+notAbroad$fin <- str_detect(notAbroad$reason_not, pattern = zero_or_more(ALPHA) %R% "Financial")
+notAbroad$course <- str_detect(notAbroad$reason_not, pattern = zero_or_more(ALPHA) %R% "Course")
+notAbroad$alone <- str_detect(notAbroad$reason_not, pattern = zero_or_more(ALPHA) %R% "Alone")
+notAbroad$var <- str_detect(notAbroad$reason_not, pattern = zero_or_more(ALPHA) %R% "varsity")
+
+notAbroad <- pivot_longer(notAbroad, cols = fin:var, 
+                                  names_to = "reason_not_2.0", 
+                                  values_to = "reason_not_TF") %>% 
+  filter(reason_not_TF == "TRUE") %>% 
+  select(-reason_not_TF)
+  
+#bar chart of majors vs study abroad
+notAbroad %>%  
+  filter(noDoubleMajor != "other") %>% 
+  ggplot() +
+  geom_bar(aes(reason_not_2.0, fill = noDoubleMajor)) + 
+  labs(x = "Reason for not attending OCS program", 
+       title = "Students who did not attend OCS program by field of major",
+       fill = "Field of Major") +
+  theme(
+    panel.background = element_rect(fill = "black",colour = "white",size = 0.5), 
+    panel.grid.major = element_line(colour = "grey70"),
+    axis.title.y = element_blank()) 
+
+#bar chart of varsity vs study abroad
+notAbroad %>%  
+  drop_na(varsity) %>% 
+  filter(noDoubleMajor != "other") %>% 
+  ggplot() +
+  geom_bar(aes(reason_not_2.0, fill = varsity)) + 
+  labs(x = "Reason for not attending OCS program", 
+       title = "Students who did not attend OCS program (by varsity)",
+       fill = "Varsity") +
+  theme(
+    panel.background = element_rect(fill = "black",colour = "white",size = 0.5), 
+    panel.grid.major = element_line(colour = "grey70"),
+    axis.title.y = element_blank()) 
+
+#bar chart of ocs_before vs study abroad
+notAbroad %>%  
+  drop_na(ocs_before) %>% 
+  ggplot() +
+  geom_bar(aes(reason_not_2.0, fill = ocs_before)) + 
+  labs(x = "Reason for not attending OCS program", 
+       title = "Students who did not attend OCS program 
+       (by whether or not the students planned to attend OCS program 
+       before coming to Carleton)",
+       fill = "Plan") +
+  theme(
+    panel.background = element_rect(fill = "black",colour = "white",size = 0.5), 
+    panel.grid.major = element_line(colour = "grey70"),
+    axis.title.y = element_blank()) 
+
+#INSERT REASON_NOT_TEXT VISUALIZATION FROM QUALTRICS AFTER THIS
 ```
-```{r}
-ocs$europe <- as.factor(ocs$europe) %>% 
-  recode_factor("1" = "Yes", "2" = "No")
 
-ocs %>% 
-  group_by(europe, major) %>% 
-  summarize(count = length(europe))
-
-#not including double majors
-ocs %>% 
-  drop_na(major, europe) %>% 
-  filter(major == "Stem" | major == "Humanities" |major == "Social Science" | major =="Arts"| major == "Others") %>% 
-  group_by(europe, major) %>%
-  summarize(count = length(major)) %>%
-  ggplot(aes(x = europe, y = count, fill = major)) + geom_bar(position = "dodge", stat = "identity")
-```
 ```{r}
-ocs %>% 
+#RELATIONSHIP BETWEEN MAJOR AND WHY EUROPE
+
+majorEurope <- ocs_pivottedMajor %>% 
   filter(europe == "Yes") %>% 
-  group_by(reason_europe) %>% 
-  summarize(count = length(reason_not))
+  select(reason_europe, reason_europe_text, varsity, ocs_before, noDoubleMajor)
+
+majorEurope$exp <- str_detect(majorEurope$reason_europe, pattern = zero_or_more(ALPHA) %R% "Explore")
+majorEurope$subject <- str_detect(majorEurope$reason_europe, pattern = zero_or_more(ALPHA) %R% "Subject")
+majorEurope$fin <- str_detect(majorEurope$reason_europe, pattern = zero_or_more(ALPHA) %R% "Financial")
+majorEurope$travel <- str_detect(majorEurope$reason_europe, pattern = zero_or_more(ALPHA) %R% "Travel")
+majorEurope$lang <- str_detect(majorEurope$reason_europe, pattern = zero_or_more(ALPHA) %R% "Language")
+
+majorEurope <- pivot_longer(majorEurope, cols = exp:lang, 
+                                  names_to = "reason_europe_2.0", 
+                                  values_to = "reason_europe_TF") %>% 
+  filter(reason_europe_TF == "TRUE") %>% 
+  select(-reason_europe_TF)
+
+#bar chart of majors vs studying in Europe
+
+majorEurope %>%  
+  filter(noDoubleMajor != "other") %>% 
+  ggplot() +
+  geom_bar(aes(reason_europe_2.0, fill = noDoubleMajor)) + 
+  labs(x = "Reason for attending European Program", 
+       title = "Number of students who attended European Programs (by major)",
+       fill = "Field of Major") +
+  theme(
+    panel.background = element_rect(fill = "black",colour = "white",size = 0.5), 
+    panel.grid.major = element_line(colour = "grey70"),
+    axis.title.y = element_blank()) 
+
+#bar chart of varsity vs studying in Europe
+
+majorEurope %>%  
+  drop_na(varsity) %>% 
+  filter(noDoubleMajor != "other") %>% 
+  ggplot() +
+  geom_bar(aes(reason_europe_2.0, fill = varsity)) + 
+  labs(x = "Reason for attending European Program", 
+       title = "Number of students who attended European Programs (by varsity)",
+       fill = "Varsity") +
+  theme(
+    panel.background = element_rect(fill = "black",colour = "white",size = 0.5), 
+    panel.grid.major = element_line(colour = "grey70"),
+    axis.title.y = element_blank()) 
+
+#
+majorEurope %>%  
+  drop_na(ocs_before) %>% 
+  filter(noDoubleMajor != "other") %>% 
+  ggplot() +
+  geom_bar(aes(reason_europe_2.0, fill = ocs_before)) + 
+  labs(x = "Reason for attending European Program", 
+       title = "Number of students who attended European Programs 
+       (by plans before Carleton)",
+       fill = "Plans") +
+  theme(
+    panel.background = element_rect(fill = "black",colour = "white",size = 0.5), 
+    panel.grid.major = element_line(colour = "grey70"),
+    axis.title.y = element_blank())
+
+#INSERT REASON_EUROPE_TEXT VISUALIZATION FROM QUALTRICS AFTER THIS
 ```
+
+
+
+
+
 
