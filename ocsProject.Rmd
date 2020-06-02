@@ -1,0 +1,140 @@
+---
+title: "ocsProject"
+author: "Kunsang"
+date: "4/15/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(rebus)
+library(stringr)
+```
+
+```{r}
+ocs <- read_excel("ocs_data.xlsx")
+unique(ocs$`Ethnic Group Code`)
+```
+```{r}
+#what is FN? 
+for (row in 1:nrow(ocs)) {
+    ethnic <- ocs[row, "Ethnic Group Code"]
+    if(ethnic == 'FW') {
+        ocs[row, "Ethnic Group Code"] <- 'White'
+    } else if(ethnic == 'FU') {
+        ocs[row, "Ethnic Group Code"] <- 'Unidentified'
+    } else if(ethnic == 'FT') {
+        ocs[row, "Ethnic Group Code"] <- 'Multiple'
+    } else if(ethnic == 'FB') {
+        ocs[row, "Ethnic Group Code"] <- 'Black'
+    } else if(ethnic == 'FH') {
+        ocs[row, "Ethnic Group Code"] <- 'Hispanic'
+    } else if(ethnic == 'FI') {
+        ocs[row, "Ethnic Group Code"] <- 'International'
+    } else if(ethnic == 'FA') {
+        ocs[row, "Ethnic Group Code"] <- 'Asian'
+    } else if(ethnic == 'FP') {
+        ocs[row, "Ethnic Group Code"] <- 'PacificIslander'
+    }
+}
+```
+
+```{r}
+#double major problem
+#separate double major into two columns
+ocs <- separate(ocs, 'Majors', paste("Major", 1:2, sep="_"),sep=",", extra = "drop")
+ocs$Major_1 <- as.factor(ocs$Major_1) #convert as factors
+ocs$Major_2 <- as.factor(ocs$Major_2) #convert as factors
+
+#same with minor
+ocs <- separate(ocs, 'Minors', paste("Minor", 1:2, sep="_"),sep=",", extra = "drop")
+ocs$Minor_1 <- as.factor(ocs$Minor_1) #convert as factors
+ocs$Minor_2 <- as.factor(ocs$Minor_2) #convert as factors
+
+#create a new column(group)
+ocs <- mutate(ocs, Major_1Group = fct_collapse(Major_1, ARTS=c("ARTH","ARTS","CAMS","DANCE","MUSC","THEA"),
+ STEM=c("BIOL","CGSC","CHEM","COGSC","CS","ECON","ENST","GEOL","MATH","MATS","PHYS","PSYC","STAT"),
+HUMAN=c("AFAM","AFST","AMEST","AMST","ASST","CLAS","CLSS","HIST","LING","LTAM","PHIL","POSC","POSI","PPHHI","RELG","SOAN","WGST"),
+ LAN=c("CHINA","CLLN","ENGL","FRST","JALLI","JLALI","RUSS","SPAN","GERM"),
+OTHER=c("SPECL","UNDC")))
+```
+
+```{r}
+ocs %>% 
+  drop_na(Major_1Group, Duration) %>% 
+  filter(Major_1Group != "OTHER") %>% 
+  ggplot() +
+  geom_bar(aes(Major_1Group, fill = Duration))
+```
+
+```{r}
+ocs %>% 
+  filter(Duration == "S" | Duration == "T") %>% 
+  filter(Major_1Group != "OTHER") %>% 
+  group_by(Major_1Group, Duration) %>% 
+  summarize(count = n())
+
+t <- ocs %>% 
+  filter(Duration == "S" | Duration == "T") %>% 
+  filter(Major_1Group != "OTHER") 
+
+table(t$Major_1Group, t$Duration)
+
+y <- c(370, 637, 102, 284, 735, 1196, 76, 240)
+major <- factor(c(rep("humanities",2),rep("arts",2), rep("stem",2), rep("language",2)))
+duration <- factor(rep(c("Semester","Term"),4))
+major_duration_df <- data.frame(y, major, duration)
+major_duration_df
+
+major_duration_glm <- glm(y ~ major + duration + major:duration, family=poisson, data=major_duration_df)
+summary(major_duration_glm)
+
+ocs %>% 
+  filter(Duration == "S" | Duration == "T") %>% 
+  filter(Major_1Group != "OTHER") %>% 
+  group_by(Major_1Group, Duration) %>% 
+  ggplot() +
+  geom_bar(aes(Major_1Group, fill = Duration))
+```
+```{r}
+unique(ocs$Term)
+ocs$winter <- str_detect(ocs$Term, pattern = zero_or_more(ALPHA) %R% "WI")
+ocs$fall <- str_detect(ocs$Term, pattern = zero_or_more(ALPHA) %R% "FA")
+ocs$summer <- str_detect(ocs$Term, pattern = zero_or_more(ALPHA) %R% "SU")
+ocs$winterspring <- str_detect(ocs$Term, pattern = zero_or_more(ALPHA) %R% "WS")
+ocs$spring <- str_detect(ocs$Term, pattern = zero_or_more(ALPHA) %R% "SP")
+ocs$allyear <- str_detect(ocs$Term, pattern = zero_or_more(ALPHA) %R% "AY")
+ocs$fallwinter <- str_detect(ocs$Term, pattern = zero_or_more(ALPHA) %R% "FW")
+
+ocs_pivot <- pivot_longer(ocs, cols = winter:fallwinter, 
+                                  names_to = "term_2.0", 
+                                  values_to = "termTF") %>% 
+  filter(termTF == "TRUE") %>% 
+  select(-termTF)
+
+
+ocs_pivot %>% 
+  filter(Duration == "S" | Duration == "T") %>% 
+  filter(Major_1Group != "OTHER") %>% 
+  filter(term_2.0 == "fall" | term_2.0 == "winter" | term_2.0 == "spring") %>% 
+  group_by(Major_1Group, Duration, term_2.0) %>% 
+  summarize(count = n())
+
+ocs_pivot %>% 
+  filter(Duration == "S" | Duration == "T") %>% 
+  filter(Major_1Group != "OTHER") %>% 
+  filter(term_2.0 == "fall" | term_2.0 == "winter" | term_2.0 == "spring") %>% 
+  group_by(Major_1Group, Duration, term_2.0) %>% 
+  ggplot() +
+  geom_bar(aes(Major_1Group, fill = Duration)) +
+  facet_wrap(term_2.0~.)
+
+
+```
+
